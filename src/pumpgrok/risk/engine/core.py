@@ -96,6 +96,20 @@ class RiskEngine(_EngineSteps):
         # Breaker name -> order_hash of the order holding its admitted probe.
         self._probe_owners: dict[str, str] = {}
 
+    def set_autonomy(self, level: Literal["manual-ticket", "autonomous-paper"]) -> None:
+        """Apply the ledger autonomy level before the next check.
+
+        Live mode cannot leave ``manual-ticket``. Cached decisions are dropped
+        so a level change cannot reuse a verdict from the previous level.
+        """
+        if level not in ("manual-ticket", "autonomous-paper"):
+            raise ValueError("autonomy level must be manual-ticket or autonomous-paper")
+        if self._mode == "live":
+            self._autonomy = "manual-ticket"
+        else:
+            self._autonomy = level
+        self._decisions.clear()
+
     @property
     def reputation(self) -> ReputationBook | None:
         """Attached reputation book, if the desk wired one (R62)."""
