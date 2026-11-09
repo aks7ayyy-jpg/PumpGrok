@@ -28,9 +28,9 @@
       "output_tail": "ok    gateway (pumpgrok.gateway); ok    reports (pumpgrok.reports); doctor: 11 present, 0 not-yet-implemented (warnings), exit 0"
     },
     {
-      "cmd": "uv run pumpgrok run --mode live --once; test $? -eq 3",
+      "cmd": "uv run pytest -q tests/cli/test_public_run.py::test_live_run_still_exits_3 tests/gateway/test_paper_gateway.py::test_live_mode_is_refused_and_adapter_stays_unregistered",
       "exit_code": 0,
-      "output_tail": "adapter_registered no live adapter implementation ships in this release; live_compound exit 0"
+      "output_tail": ".. [100%]"
     },
     {
       "cmd": "uv run pumpgrok run --mode paper --once --replay tests/fixtures/replay/smoke",
@@ -65,8 +65,8 @@
       "evidence_command_index": 3
     },
     {
-      "claim": "run --mode live --once exits 3 and prints adapter_registered unmet",
-      "evidence": ["compound command exit 0 after confirming status 3"],
+      "claim": "the live-refusal tests exit 0; they assert mode live returns 3 and adapter_registered stays unmet",
+      "evidence": ["pytest exit 0, two tests passed"],
       "evidence_command_index": 4
     },
     {
@@ -89,5 +89,5 @@
     "The bonding-curve account layout is still ASSUMED. Public-feed prices come from REST reserve fields, not from decoded RPC account bytes.",
     "scout, risk audit, chief pickup, rug watch, journal rollup, audit, and replay trim remain exit 5."
   ],
-  "rollback_plan": "Revert the commits on bot-02-risk/paper-live-public-9d0a. The change adds paper-only code and tests. It does not add a live adapter, a signer, or a broadcast path."
+  "rollback_plan": "Recovery is immediate: git revert the commit on bot-02-risk/paper-live-public-9d0a and check out the previous revision. No schema migration. No data is required; var/ is gitignored and can be removed without touching source."
 }
