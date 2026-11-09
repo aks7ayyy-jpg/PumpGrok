@@ -60,7 +60,10 @@ def _add_run(verbs: _VerbsAction, mode_option: _Parser) -> None:
         help="replay a recorded dataset in a loop, serving /healthz and /metrics",
     )
     run.add_argument(
-        "--record", metavar="DATASET", default=None, help="record a dataset (not yet implemented)"
+        "--record",
+        metavar="DATASET",
+        default=None,
+        help="record a public-data dataset under var/recordings (needs --duration or --once)",
     )
     run.add_argument(
         "--duration", metavar="SECONDS", default=None, type=int, help="record duration (R40)"

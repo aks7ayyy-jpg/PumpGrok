@@ -23,6 +23,7 @@ import pytest
 from pumpgrok.cli import main
 from pumpgrok.config.settings import FORBIDDEN_SUBSTRINGS, FilterSettings
 from pumpgrok.ledger.store import GENESIS_PREV_HASH, LedgerStore
+from pumpgrok.live.feed import FeedPoll
 from pumpgrok.replay.clock import parse_ts_utc
 from pumpgrok.replay.fixtures import event_epoch, load_dataset
 from pumpgrok.replay.runner import run_replay
@@ -180,12 +181,24 @@ def test_second_run_recreates_the_replay_ledger(
     _replay_ledger_contract(_ledger(tmp_path))
 
 
-def test_run_without_replay_exits_5_and_creates_no_ledger(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_paper_once_without_replay_reads_the_public_feed_and_creates_no_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """One public poll, no replay directory. A blind feed writes no ledger."""
     monkeypatch.chdir(tmp_path)
-    assert main(["run", "--mode", "paper"]) == 5
-    assert main(["run", "--mode", "paper", "--once"]) == 5
+
+    class _Blind:
+        async def poll(self) -> FeedPoll:
+            return FeedPoll(ticks=(), rest="BLIND", rpc="BLIND", slot=None)
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "pumpgrok.cli.verbs_state.build_public_feed", lambda *_args, **_kwargs: _Blind()
+    )
+    assert main(["run", "--mode", "paper", "--once"]) == 0
+    assert "public feed rest=BLIND" in capsys.readouterr().out
     assert not (tmp_path / "var").exists()
 
 
@@ -272,6 +285,8 @@ def test_doctor_reports_absent_subsystems_as_warnings(
     assert "ok    tools (pumpgrok.tools)" in out
     assert "ok    engine (pumpgrok.engine)" in out
     assert "ok    supervisor (pumpgrok.supervisor)" in out
-    for absent in ("gateway", "reports"):
-        assert f"warn  {absent} (pumpgrok.{absent}): not-yet-implemented" in out
+    for present in ("gateway", "reports"):
+        assert f"ok    {present} (pumpgrok.{present})" in out
+    assert "warn  gateway" not in out
+    assert "warn  reports" not in out
     assert not (tmp_path / "var").exists()

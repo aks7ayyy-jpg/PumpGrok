@@ -47,6 +47,8 @@ from pumpgrok.ledger.autonomy import autonomy_rows, read_autonomy
 from pumpgrok.ledger.paths import PAPER_LEDGER_PATH
 from pumpgrok.ledger.store import LedgerInconsistent, LedgerStore
 from pumpgrok.ledger.tickets import allocate_ticket
+from pumpgrok.live.feed import build_public_feed
+from pumpgrok.live.session import run_public_session
 from pumpgrok.replay.clock import WallClock, format_ts_utc
 from pumpgrok.replay.rng import make_rng
 from pumpgrok.replay.runner import format_trade
@@ -98,23 +100,29 @@ def _run(args: argparse.Namespace, settings: Settings) -> int:
         if any(not item.met for item in preconditions):
             _say(sys.stderr, *refusal_lines(preconditions))
             return EXIT_LIVE
-    if args.record is not None or args.duration is not None:
-        return _not_implemented("run --record")
     if args.serve:
-        if args.once or not args.replay:
-            _say(
-                sys.stderr,
-                "not implemented: `run --serve` needs `--replay <dir>` without `--once`",
-            )
-            return EXIT_NOT_IMPLEMENTED
-        return _serve_replay_loop(Path(args.replay), settings)
-    if not (args.once and args.replay):
+        return _run_serve(args, settings)
+    if args.once and args.replay and args.record is None and args.duration is None:
+        return _skip_cycle(Path(args.replay), settings)
+    if args.replay:
         _say(
             sys.stderr,
             "not implemented: this release runs only `run --mode paper --once --replay <dir>`",
         )
         return EXIT_NOT_IMPLEMENTED
-    return _skip_cycle(Path(args.replay), settings)
+    return _run_public(args, settings)
+
+
+def _run_serve(args: argparse.Namespace, settings: Settings) -> int:
+    if args.record is not None or args.duration is not None:
+        return _not_implemented("run --record")
+    if args.once or not args.replay:
+        _say(
+            sys.stderr,
+            "not implemented: `run --serve` needs `--replay <dir>` without `--once`",
+        )
+        return EXIT_NOT_IMPLEMENTED
+    return _serve_replay_loop(Path(args.replay), settings)
 
 
 def _serve_replay_loop(source: Path, settings: Settings) -> int:
@@ -151,6 +159,40 @@ def _serve_replay_loop(source: Path, settings: Settings) -> int:
             promotion_check=promotion,
         )
     )
+
+
+def _run_public(args: argparse.Namespace, settings: Settings) -> int:
+    """Paper session on the public feed. Replay is not this path.
+
+    ``--record`` writes ``var/recordings/<dataset>``. A recording needs
+    ``--once`` or ``--duration`` so the process has a finished dataset to hash.
+    Live mode never reaches here.
+    """
+    if args.duration is not None and args.duration < 0:
+        raise UsageError("bad --duration: want a non-negative number of seconds")
+    if args.record is not None and not DATASET_NAME_RE.fullmatch(str(args.record)):
+        raise ConfigError([f"dataset name is not a plain name: {args.record!r}"])
+    if args.record is not None and not args.once and args.duration is None:
+        raise UsageError("run --record needs --once or --duration")
+    clock = WallClock()
+    feed = build_public_feed(settings, clock, make_rng(settings.replay.seed))
+
+    async def _go() -> int:
+        try:
+            result = await run_public_session(
+                settings,
+                feed,
+                clock,
+                once=bool(args.once),
+                duration_s=args.duration,
+                record=args.record,
+            )
+        finally:
+            await feed.aclose()
+        _say(sys.stdout, *result.lines())
+        return EXIT_OK
+
+    return asyncio.run(_go())
 
 
 def _skip_cycle(source: Path, settings: Settings) -> int:

@@ -33,9 +33,7 @@ from pumpgrok.core.units import sol_to_lamports
 from pumpgrok.doctor import doctor_report
 from pumpgrok.ledger.paths import PAPER_LEDGER_PATH
 from pumpgrok.ledger.store import LedgerStore
-from pumpgrok.reporting.daily import DailyReport
-from pumpgrok.reporting.render import render_daily, render_weekly
-from pumpgrok.reporting.weekly import WeeklyReport
+from pumpgrok.reports import render_report_daily, render_report_weekly
 from pumpgrok.supervisor.scheduler import run_once_replay
 from pumpgrok.tools import ensure_paper_genesis
 
@@ -155,10 +153,10 @@ def _report_verb(args: argparse.Namespace, settings: Settings) -> int:
     mode = settings.effective_mode
     if args.daily:
         day = _report_date(args.day, "--day")
-        body = render_daily(DailyReport.build(ledger, day, mode=mode))
+        body = render_report_daily(ledger, day, mode=mode)
     else:
         week = _report_date(args.week, "--week")
-        body = render_weekly(WeeklyReport.build(ledger, week, mode=mode, root=Path.cwd(), now=week))
+        body = render_report_weekly(ledger, week, mode=mode, root=Path.cwd(), now=week)
     if args.out:
         target = Path(str(args.out))
         target.parent.mkdir(parents=True, exist_ok=True)
